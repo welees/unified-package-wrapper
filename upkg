@@ -1,0 +1,219 @@
+#!/bin/sh
+
+CONFIG_FILE=/etc/unified-packager/config.ini
+
+distros="uos:apt linuxmint:apt deepin:apt ubuntu:apt debian:apt centos:yum fedora:dnf redhat:yum arch:pacman manjaro:pacman opensuse:zypper suse:zypper gentoo:emerge kali:apt"
+
+apt_install=install
+apt_remove=purge
+apt_search=search
+apt_list=list
+apt_info=show
+apt_update=update
+apt_upgrade=upgrade
+apt_reinstall='install --reinstall'
+apt_autoremove=autoremove
+apt_download='install --download-only'
+
+dnf_install=install
+dnf_remove=remove
+dnf_search=search
+dnf_list=list
+dnf_info=info
+dnf_update=update
+dnf_upgrade=upgrade
+dnf_reinstall=reinstall
+dnf_autoremove=autoremove
+dnf_download='install --downloadonly'
+
+yum_install=install
+yum_remove=remove
+yum_search=search
+yum_list=list
+yum_info=info
+yum_update=update
+yum_upgrade=upgrade
+yum_reinstall=reinstall
+yum_autoremove=autoremove
+yum_download='install --downloadonly'
+
+zypper_install=in
+zypper_remove=rm
+zypper_search=se
+zypper_list=lp
+zypper_info=if
+zypper_update=up
+zypper_upgrade=up
+zypper_reinstall='in --force'
+zypper_autoremove='rm --clean-deps'
+zypper_download='in --download-only'
+
+pacman_install=-S
+pacman_remove=-R
+pacman_search=-Ss
+pacman_list=-Q
+pacman_info=-Qi
+pacman_update=-Sy
+pacman_upgrade=-Syu
+pacman_reinstall=-S --reinstall
+pacman_autoremove=-Rns
+pacman_download=-Sw
+pacman_param_alias=-y:--noconfirm
+
+emerge_install=--ask
+emerge_remove=--unmerge
+emerge_search=--search
+emerge_list=-I
+emerge_info=-S
+emerge_update=--update
+emerge_upgrade=--update
+
+
+read_config()
+{
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "Error: Config file $CONFIG_FILE not found" >&2
+        exit 1
+    fi
+    while IFS='=' read -r key value; do
+        case "$key" in
+            distro.*)
+                #echo ${key}/${value}
+                distro_name=${key#distro.}
+                distros="${distros} ${key#distro.}:${value} "
+                ;;
+            *)
+                if [ ! -z "$key" ]; then
+                    key="`echo $key|sed 's/\./_/'`='${value}'"
+                    #echo key=$key
+                    eval "$key"
+                fi
+                ;;
+        esac
+    done < "$CONFIG_FILE"
+    distros=`echo $distros|tr ' ' '\n'|sort -u|tr '\n' ' '`
+}
+
+get_alias()
+{
+    aliases=$(get_var_value "$1"_param_alias)
+    org=`echo $2|sed 's/-/\\\\-/g'`
+    alias=`echo $aliases|tr ' ' '\n'|grep "$org"`
+    if [ -z "$alias" ];then
+        echo $2
+    else
+        echo $alias|sed 's/.*://'
+    fi
+}
+
+get_distro()
+{
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        case $ID in
+            ubuntui|kali|debian|centos|fedora|rhel|redhat|arch|manjaro|opensuse|suse|gentoo)
+                echo "$NAME:$ID"
+                ;;
+            *)
+                echo -n "$NAME:";echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '_'
+                ;;
+        esac
+    else
+        #uname -o 2>/dev/null | tr '[:upper:]' '[:lower:]' | sed 's/gnu\///'
+        echo `uname -s | sed 's/Darwin/macOS/'`:`uname -s | tr '[:upper:]' '[:lower:]'`
+    fi
+}
+
+get_var_value()
+{
+    var_name="$1"
+    eval "echo \"\$$var_name\""
+}
+
+show_help() {
+    cat <<EOF
+Usage:
+  upkg [Command] [Options] [Package] [Package] ...
+
+Commands:
+  help         Show usage message
+  install      Install package(s)
+  remove       Remove package(s)
+  search       Search for packages
+  list         List installed packages
+  info         Show package information
+  update       Update package lists
+  upgrade      Upgrade installed packages
+  reinstall    Reinstall package(s)
+  autoremove   Remove unused packages
+  download     Download only (no install)
+
+Options:
+  -y           Answer yes to all prompts
+EOF
+}
+
+main()
+{
+    echo "weLees Unified cross-distribution package manager wrapper"
+    printf "  Version 0.0.9 for all architectures\n"
+    printf "  If you find any question, please mail to support@welees.com\n\n"
+    
+    # Show help if no arguments
+    if [ $# -eq 0 ]; then
+        show_help
+        exit 0
+    fi
+
+    # Check for --help
+    for arg in "$@"; do
+        if [ "$arg" = "--help" ]; then
+            show_help
+            exit 0
+        fi
+    done
+
+    read_config
+    distro=$(get_distro)
+    echo "  Current platform : "$(echo $distro|sed 's/:.*//')
+    distro=$(echo $distro|sed 's/.*://')
+    tool=$(echo $distros|tr ' ' '\n'|grep "$distro"|sed 's/.*://')
+    echo "  Built-in package manager : "$tool
+    
+    original=''
+    action=''
+    flags=''
+    others=''
+    for arg in $@;do
+        original="$original $arg"
+        if [ -z "$action" ]; then
+            action=$arg
+            continue
+        fi
+        case $arg in
+             -*)
+                 arg=$(get_alias "$tool" "$arg")
+                 flags="$flags $arg"
+                 ;;
+             *)
+                 others="$others $arg"
+                 ;;
+        esac
+    done
+    #echo Action="$action"
+    #echo Flags="$flags"
+    #echo Others="$others"
+    #echo Original="$original"
+    cmd=$(get_var_value "$tool"_"$action")
+    #echo cmd "$cmd"
+    if [ -z "$cmd" ]; then
+        echo "    Unknown action $action, try original parameters: $original"
+        $tool $original
+    else
+        echo "  Platform package command : $tool $cmd $flags $others"
+        $tool $cmd $flags $others
+    fi
+}
+
+main "$@"
+
