@@ -1,0 +1,163 @@
+#!/bin/sh
+
+
+read_config()
+{
+    if [ ! -f "$1" ]; then
+        echo "Error: Configure file $1 not found" >&2
+        exit 1
+    fi
+    
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [ -z "$line" ] || [ "$line" != "${line#\#}" ]; then
+            continue
+        fi
+        if [ "$line" = "[distros]" ]; then
+            title='distro'
+	    continue
+        elif echo $line|grep -q "^\[.*\]$"; then
+            title=`echo $line|sed -e 's/\./_/;s/\[//;s/\]/_/'`
+	    continue
+	fi
+        key="${line%%=*}"
+        value="${line#*=}"
+	if [ "$title" = "distro" ]; then
+	    key=`echo $key|sed 's/-/_/g'`
+            #echo "tool_+$key+=+$value+"
+	    distros="$distros $value"
+            eval "tool_$key=$value"
+        else
+            #echo "$title$key='$value'"
+            eval "$title$key='$value'"
+        fi
+    done < "$1"
+}
+
+
+show_help() {
+    cat <<EOF
+Usage:
+  gu-pkg [Command] [Options] [Package] [Package] ...
+
+Commands:
+  help         Show usage message
+  install      Install package(s)
+  remove       Remove package(s)
+  search       Search for packages
+  list         List installed packages
+  info         Show package information
+  update       Update package lists
+  upgrade      Upgrade installed packages
+  reinstall    Reinstall package(s)
+  autoremove   Remove unused packages
+  download     Download only (no install)
+  clean        Clean package cache
+Options:
+  -y           Answer yes for all prompts
+EOF
+}
+
+
+get_distro()
+{
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [ `echo $distros|grep $ID` ]; then
+            echo "$NAME:"`echo $ID|sed -e 's/ /_/g;s/-/_/g'`
+	else
+            echo -n "$NAME:";echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '_'
+        fi
+    else
+        #uname -o 2>/dev/null | tr '[:upper:]' '[:lower:]' | sed 's/gnu\///'
+        echo `uname -s | sed 's/Darwin/macOS/'`:`uname -s | tr '[:upper:]' '[:lower:]'`
+    fi
+}
+
+
+get_var_value()
+{
+    var_name="$1"
+    eval "echo \"\$$var_name\""
+}
+
+
+main()
+{
+    echo "weLees unified cross-distribution package manager wrapper"
+    printf "  Version 0.9.0 for all architectures\n"
+    printf "  If you find any question, please mail to support@welees.com\n\n"
+
+    # Show help if no arguments
+    if [ $# -eq 0 ]; then
+        show_help
+        exit 0
+    fi
+    
+    config_file="/etc/uni-pkg/config.ini"
+    # Check for --help
+    for arg in "$@"; do
+        if [ "$arg" = "help" ]; then
+            show_help
+            exit 0
+        fi
+        if [ "${arg%%=*}" = "--config-file" ]; then
+            config_file="${arg#*=}"
+	    echo "  User specified configure file '$config_file'"
+	    shift
+	fi
+    done
+    
+    distro=$(get_distro)
+    echo "  Current platform : "$(echo $distro|sed 's/:.*//')
+    distro=$(echo $distro|sed 's/.*://')
+ 
+    read_config "$config_file"
+    tool=$(get_var_value "tool_$distro")
+    echo "  Built-in package manager : "$tool
+    
+    original=''
+    action=''
+    flags=''
+    others=''
+ 
+   for arg in "$@";do
+        original="$original $arg"
+        if [ -z "$action" ] && [ -z `echo $arg|grep '^-'` ]; then
+            action=$arg
+            continue
+        fi
+        case $arg in
+            -*)
+                 name=`echo $arg|sed -e 's/^-//'`
+                 alias=$(get_var_value "$tool"_alias_"$name")
+		 if [ -n "$alias" ]; then
+                     arg=$alias
+                 fi
+                 flags="$flags $arg"
+                 ;;
+            *)
+                 others="$others $arg"
+                 ;;
+        esac
+    done
+    #echo "$tool"_cmd_"$action"
+    cmd=$(get_var_value "$tool"_cmd_"$action")
+    #echo cmd=$cmd arg=$arg flags=$flags others=$others
+    if [ -z "$cmd" ]; then
+        echo "    Unknown action $action, try original parameters: $original"
+        $tool $original
+    else
+        case "${cmd%% *}" in
+            emerge)
+                if [ "echo $cmd|grep '-a'" ] && [ "echo $flags|grep '-y'" ]; then
+		    cmd=`echo $cmd|sed 's/ -a/ -a n/'`
+		    flags=`echo $flags|sed 's/-y\b//'`
+                fi
+                ;;
+        esac
+        echo "  Built-in platform package command : $cmd $flags $others"
+        eval "$cmd $flags $others"
+    fi
+}
+
+main "$@"
