@@ -42,6 +42,7 @@ y=--noconfirm
 
 For any questions or suggestions, please email support@welees.com.
 
+---------------------------------------------------------------------------------------------------------------------
 
 WeLees unified packager是一个支持大多数LINUX发行版的通用包管理器封装。
 使用unified pacakger的用户可以在大多数LINUX发行版上使用单一的命令组来执行管理操作。
