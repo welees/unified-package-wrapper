@@ -24,7 +24,7 @@ read_config()
 	if [ "$title" = "distro" ]; then
 	    key=`echo $key|sed 's/-/_/g'`
             #echo "tool_+$key+=+$value+"
-	    distros="$distros $value"
+	    distros="$distros $key"
             eval "tool_$key=$value"
         else
             #echo "$title$key='$value'"
@@ -62,12 +62,14 @@ get_distro()
 {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        if [ `echo $distros|grep $ID` ]; then
-            echo "$NAME:"`echo $ID|sed -e 's/ /_/g;s/-/_/g'`
-	else
+        result=$(echo "$distros"|grep $ID)
+        if [ -z "$result" ]; then
             echo -n "$NAME:";echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '_'
+	else
+            echo "$NAME:"`echo $ID|sed -e 's/ /_/g;s/-/_/g'`
         fi
     else
+echo d
         #uname -o 2>/dev/null | tr '[:upper:]' '[:lower:]' | sed 's/gnu\///'
         echo `uname -s | sed 's/Darwin/macOS/'`:`uname -s | tr '[:upper:]' '[:lower:]'`
     fi
@@ -107,11 +109,11 @@ main()
 	fi
     done
     
+    read_config "$config_file"
     distro=$(get_distro)
     echo "  Current platform : "$(echo $distro|sed 's/:.*//')
     distro=$(echo $distro|sed 's/.*://')
  
-    read_config "$config_file"
     tool=$(get_var_value "tool_$distro")
     echo "  Built-in package manager : "$tool
     
