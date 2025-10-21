@@ -65,7 +65,7 @@ get_distro()
         result=$(echo "$distros"|grep $ID)
         if [ -z "$result" ]; then
             echo -n "$NAME:";echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '_'
-	else
+        else
             echo "$NAME:"`echo $ID|sed -e 's/ /_/g;s/-/_/g'`
         fi
     else

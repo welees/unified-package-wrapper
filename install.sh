@@ -1,3 +1,4 @@
+#!/bin/bash
 if [ ! -d /etc/uni-pkg ]; then
     mkdir /etc/uni-pkg
 fi
