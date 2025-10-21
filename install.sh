@@ -1,13 +1,8 @@
-echo a
 if [ ! -d /etc/uni-pkg ]; then
-echo b
     mkdir /etc/uni-pkg
 fi
-echo c
 if [ -f /etc/uni-pkg/config.ini ]; then
-echo d
     read -r -p "There is another Universe pacakger existed, do you want to overwrite it?(y/N) " input
-echo $input
     if [[ "$input" != "y" && "$input" != "Y" ]]; then
         echo Install abort.
 	exit 1
