@@ -69,7 +69,6 @@ get_distro()
             echo "$NAME:"`echo $ID|sed -e 's/ /_/g;s/-/_/g'`
         fi
     else
-echo d
         #uname -o 2>/dev/null | tr '[:upper:]' '[:lower:]' | sed 's/gnu\///'
         echo `uname -s | sed 's/Darwin/macOS/'`:`uname -s | tr '[:upper:]' '[:lower:]'`
     fi
